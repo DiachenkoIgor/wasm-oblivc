@@ -1,0 +1,56 @@
+diff --git a/src/Makefile.in b/src/Makefile.in
+index c8b8b94..bf3e3dd 100644
+--- a/src/Makefile.in
++++ b/src/Makefile.in
+@@ -111,7 +111,7 @@ PRE_UNINSTALL = :
+ POST_UNINSTALL = :
+ build_triplet = @build@
+ host_triplet = @host@
+-bin_PROGRAMS = dumpsexp$(EXEEXT) hmac256$(EXEEXT) mpicalc$(EXEEXT) \
++bin_PROGRAMS = dumpsexp$(EXEEXT) hmac256$(EXEEXT) \
+ 	$(am__EXEEXT_1)
+ @USE_RANDOM_DAEMON_TRUE@sbin_PROGRAMS = gcryptrnd$(EXEEXT)
+ @USE_RANDOM_DAEMON_TRUE@am__append_1 = getrandom
+@@ -188,7 +188,7 @@ dumpsexp_OBJECTS = $(am_dumpsexp_OBJECTS)
+ dumpsexp_DEPENDENCIES = $(am__DEPENDENCIES_3)
+ dumpsexp_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+ 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(dumpsexp_CFLAGS) \
+-	$(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
++	$(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
+ am__gcryptrnd_SOURCES_DIST = gcryptrnd.c
+ @USE_RANDOM_DAEMON_TRUE@am_gcryptrnd_OBJECTS =  \
+ @USE_RANDOM_DAEMON_TRUE@	gcryptrnd-gcryptrnd.$(OBJEXT)
+@@ -486,7 +486,7 @@ lib_LTLIBRARIES = libgcrypt.la
+ AM_CFLAGS = $(GPG_ERROR_CFLAGS)
+ AM_CCASFLAGS = $(NOEXECSTACK_FLAGS)
+ @HAVE_LD_VERSION_SCRIPT_FALSE@libgcrypt_version_script_cmd = 
+-@HAVE_LD_VERSION_SCRIPT_TRUE@libgcrypt_version_script_cmd = -Wl,--version-script=$(srcdir)/libgcrypt.vers
++@HAVE_LD_VERSION_SCRIPT_TRUE@libgcrypt_version_script_cmd = 
+ libgcrypt_la_CFLAGS = $(GPG_ERROR_CFLAGS)
+ libgcrypt_la_SOURCES = \
+         gcrypt-int.h g10lib.h visibility.c visibility.h types.h \
+@@ -516,8 +516,7 @@ gcrypt_hwf_modules = @GCRYPT_HWF_MODULES@
+ @HAVE_W32_SYSTEM_TRUE@gcrypt_deps = $(gcrypt_res) libgcrypt.def
+ @HAVE_W32_SYSTEM_FALSE@gcrypt_res_ldflag = 
+ libgcrypt_la_LDFLAGS = $(no_undefined) $(export_symbols) $(extra_ltoptions) \
+-	$(libgcrypt_version_script_cmd) -version-info \
+-	@LIBGCRYPT_LT_CURRENT@:@LIBGCRYPT_LT_REVISION@:@LIBGCRYPT_LT_AGE@
++	$(libgcrypt_version_script_cmd)
+ 
+ libgcrypt_la_DEPENDENCIES = \
+          $(gcrypt_hwf_modules) \
+diff --git a/src/hwf-x86.c b/src/hwf-x86.c
+index 0d3a1f4..0064548 100644
+--- a/src/hwf-x86.c
++++ b/src/hwf-x86.c
+@@ -28,10 +28,6 @@
+ #include "g10lib.h"
+ #include "hwf-common.h"
+ 
+-#if !defined (__i386__) && !defined (__x86_64__)
+-# error Module build for wrong CPU.
+-#endif
+-
+ /* We use the next macro to decide whether we can test for certain
+    features.  */
+ #undef HAS_X86_CPUID

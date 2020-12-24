@@ -1,0 +1,46 @@
+diff --git a/src/Makefile.in b/src/Makefile.in
+index 0624e92..2f91913 100644
+--- a/src/Makefile.in
++++ b/src/Makefile.in
+@@ -641,7 +641,7 @@ TESTS = gpg-error-config-test.sh
+ #
+ socklibs = @GPG_ERROR_CONFIG_LIBS_PRIVATE@
+ @HAVE_LD_VERSION_SCRIPT_FALSE@libgpg_error_vers_opt = 
+-@HAVE_LD_VERSION_SCRIPT_TRUE@libgpg_error_vers_opt = -Wl,--version-script=$(srcdir)/gpg-error.vers
++@HAVE_LD_VERSION_SCRIPT_TRUE@libgpg_error_vers_opt =
+ libgpg_error_la_LDFLAGS = \
+   -no-undefined $(export_symbols) $(libgpg_error_vers_opt) \
+   $(extra_ltoptions) -version-info \
+@@ -834,7 +834,8 @@ libgpg-error.la: $(libgpg_error_la_OBJECTS) $(libgpg_error_la_DEPENDENCIES) $(EX
+ 
+ gen-posix-lock-obj$(EXEEXT): $(gen_posix_lock_obj_OBJECTS) $(gen_posix_lock_obj_DEPENDENCIES) $(EXTRA_gen_posix_lock_obj_DEPENDENCIES) 
+ 	@rm -f gen-posix-lock-obj$(EXEEXT)
+-	$(AM_V_CCLD)$(LINK) $(gen_posix_lock_obj_OBJECTS) $(gen_posix_lock_obj_LDADD) $(LIBS)
++	gcc -DHAVE_CONFIG_H -I. -I..     -g -O2 -Wall -Wpointer-arith -c -o gen-posix-lock-obj.o gen-posix-lock-obj.c
++	../libtool  --tag=CC   --mode=link gcc  -g -O2 -Wall -Wpointer-arith   -o gen-posix-lock-obj gen-posix-lock-obj.o
+ 
+ gen-w32-lock-obj$(EXEEXT): $(gen_w32_lock_obj_OBJECTS) $(gen_w32_lock_obj_DEPENDENCIES) $(EXTRA_gen_w32_lock_obj_DEPENDENCIES) 
+ 	@rm -f gen-w32-lock-obj$(EXEEXT)
+@@ -1727,7 +1728,7 @@ gpg-error.def: Makefile gpg-error.def.in
+ # It is correct to use $(CC_FOR_BUILD) here.  We want to run the
+ # program at build time.
+ mkerrcodes$(EXEEXT_FOR_BUILD): mkerrcodes.c mkerrcodes.h Makefile
+-	$(CC_FOR_BUILD) $(CFLAGS_FOR_BUILD) $(LDFLAGS_FOR_BUILD) \
++	@gcc $(CFLAGS_FOR_BUILD) $(LDFLAGS_FOR_BUILD) \
+ 	$(CPPFLAGS_FOR_BUILD) -I. -I$(srcdir) -o $@ $(srcdir)/mkerrcodes.c
+ 
+ # It is correct to use $(CC_FOR_BUILD) here.  We want to run the
+@@ -1745,7 +1746,7 @@ errnos-sym.h: Makefile mkstrtable.awk errnos.in
+ 		$(srcdir)/errnos.in >$@
+ 
+ mkheader$(EXEEXT_FOR_BUILD): mkheader.c Makefile
+-	$(CC_FOR_BUILD) $(CFLAGS_FOR_BUILD) $(LDFLAGS_FOR_BUILD) \
++	@gcc $(CFLAGS_FOR_BUILD) $(LDFLAGS_FOR_BUILD) \
+ 	$(CPPFLAGS_FOR_BUILD) -g -I. -I$(srcdir) -o $@ $(srcdir)/mkheader.c
+ 
+ @FORCE_USE_SYSCFG_FALSE@@HAVE_GENERATED_LOCK_OBJ_H_FALSE@./lock-obj-pub.native.h: Makefile gen-posix-lock-obj$(EXEEXT) posix-lock-obj.h
+@@ -1783,3 +1784,4 @@ install-data-local:
+ # Tell versions [3.59,3.63) of GNU make to not export all variables.
+ # Otherwise a system limit (for SysV at least) may be exceeded.
+ .NOEXPORT:
++

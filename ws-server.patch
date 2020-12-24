@@ -1,0 +1,30 @@
+diff --git a/Makefile b/Makefile
+index 6f67912..e017198 100644
+--- a/Makefile
++++ b/Makefile
+@@ -30,13 +30,7 @@ ifeq ($(PREFIX),)
+     PREFIX := /usr/local
+ endif
+ 
+-# Detect machine type
+-MACHINE := $(shell uname -m)
+-ifeq ($(MACHINE), x86_64)
+-	LIBDIR = $(PREFIX)/lib64
+-else
+-	LIBDIR = $(PREFIX)/lib
+-endif
++LIBDIR = $(PREFIX)/lib
+ 
+ # Check if AFL fuzzing enabled
+ ifeq ($(AFL_FUZZ), yes)
+@@ -93,8 +87,8 @@ install: all wsserver.pc
+ 	install -d $(DESTDIR)$(LIBDIR)
+ 	install -m 644 $(LIB) $(DESTDIR)$(LIBDIR)
+ 	@#Headers
+-	install -d $(DESTDIR)$(INCDIR)/wsserver
+-	install -m 644 $(INCLUDE)/*.h $(DESTDIR)$(INCDIR)/wsserver
++	install -d $(DESTDIR)$(INCDIR)
++	install -m 644 $(INCLUDE)/*.h $(DESTDIR)$(INCDIR)
+ 	@#Manpages
+ 	install -d $(DESTDIR)$(MANDIR)/man3
+ 	install -m 0644 $(MANPAGES)/*.3 $(DESTDIR)$(MANDIR)/man3/
