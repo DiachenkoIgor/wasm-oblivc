@@ -31,45 +31,52 @@ index a6fa00a0..082b3d62 100644
  $(DEPENDDIR):
  	mkdir -p $(DEPENDDIR)
 diff --git a/bin/oblivcc b/bin/oblivcc
-index 434dafbd..b03a1616 100755
+index 434dafbd..822668b8 100755
 --- a/bin/oblivcc
 +++ b/bin/oblivcc
-@@ -1,6 +1,7 @@
+@@ -1,8 +1,11 @@
  #!/bin/bash
  OCCPATH="$(>/dev/null cd "$( dirname "${BASH_SOURCE[0]}" )"/../ && pwd )"
  OCLIB=$OCCPATH/src/ext/oblivc
++WEBRTCLIB=$OCCPATH/library_webRtc.js
 +LIBSFOLDER="$(>/dev/null cd "$( dirname "${BASH_SOURCE[0]}" )"/../ && cd .. && pwd )/libs"
  COMPILE_ONLY=0
  CCARGS=""
++POS=""
  CILLYARGS=""
-@@ -14,7 +15,7 @@ fi
+ OCSRC=()
+ GCRYPT="-lgcrypt"
+@@ -14,7 +17,9 @@ fi
  
  while [ $# -ge 1 ]; do
    if [ "$1" = "-static-gcrypt" ]; then
 -    GCRYPT="/usr/lib/x86_64-linux-gnu/libgcrypt.a -lgpg-error"
 +    GCRYPT="$LIBSFOLDER/lib/libgcrypt.a $LIBSFOLDER/lib/libgpg-error.a"
++  elif [[ $1 == ?(-)+([0-9]) ]]; then
++    POS+="$1"
    else
      CCARGS+="$1 "
    fi
-@@ -22,7 +23,7 @@ while [ $# -ge 1 ]; do
+@@ -22,7 +27,7 @@ while [ $# -ge 1 ]; do
  done
  
  set -e
 -$OCCPATH/bin/cilly -Wno-format-security -Wno-deprecated-declarations --keepunused --doprocessObliv --markImplicitCasts $OBLIV_BITS -I $OCLIB -L$OCCPATH/_build -lobliv $GCRYPT -pthread $CCARGS
-+$OCCPATH/bin/cilly --gcc=emcc -std=c99 -Wno-format-security -Wno-deprecated-declarations -sWEBSOCKET_DEBUG=1 -sPROXY_TO_PTHREAD -D_Static_assert\(x,msg\)= --keepunused --doprocessObliv --markImplicitCasts $OBLIV_BITS -I $OCLIB -L$OCCPATH/_build -lwebsocket.js -lobliv -lgpg-error  $GCRYPT -I$LIBSFOLDER/include -L$LIBSFOLDER/lib -pthread $CCARGS  -o test.html
++$OCCPATH/bin/cilly --gcc=emcc -std=c99 -Wno-format-security -Wno-deprecated-declarations -sWEBSOCKET_DEBUG=1 -sPROXY_TO_PTHREAD -D_Static_assert\(x,msg\)= --keepunused --doprocessObliv --markImplicitCasts $OBLIV_BITS -I $OCLIB -L$OCCPATH/_build -lwebsocket.js -lobliv -lgpg-error  $GCRYPT -I$LIBSFOLDER/include -L$LIBSFOLDER/lib -pthread $CCARGS  -o test$POS.html
  
  if false; then
  while [ $# -ge 1 ]; do
 diff --git a/src/ext/oblivc/obliv.h b/src/ext/oblivc/obliv.h
-index 15787618..a2821d27 100644
+index 15787618..df187fc8 100644
 --- a/src/ext/oblivc/obliv.h
 +++ b/src/ext/oblivc/obliv.h
-@@ -11,6 +11,13 @@
+@@ -11,6 +11,14 @@
  //   conversion from obliv int to OblivBits* inside inline functions.
  //   In fact, user code should never be aware of OblivBits type.
  void protocolUseStdio(ProtocolDesc*);
 +#ifdef __EMSCRIPTEN__
 +void protocolUseWebSocketClient(ProtocolDesc* pd, bool client, const char *url);
++void protocolUseWebRtc(ProtocolDesc* pd, bool client, const char *ws_url, const char *turn_urls, const char *data_channel_name, int debug);
 +#endif
 +#ifndef __EMSCRIPTEN__
 +void protocolUseWebSocketServer(ProtocolDesc* pd, int port);
@@ -79,7 +86,7 @@ index 15787618..a2821d27 100644
  void protocolUseTcp2PProfiled(ProtocolDesc* pd,int sock,bool isClient);
  void protocolUseTcp2PKeepAlive(ProtocolDesc* pd,int sock,bool isClient);
 diff --git a/src/ext/oblivc/obliv_bits.c b/src/ext/oblivc/obliv_bits.c
-index 17695c9e..d872c82d 100644
+index 17695c9e..12180de1 100644
 --- a/src/ext/oblivc/obliv_bits.c
 +++ b/src/ext/oblivc/obliv_bits.c
 @@ -1,5 +1,6 @@
@@ -89,13 +96,24 @@ index 17695c9e..d872c82d 100644
  #include <obliv_float_ops.h>
  #include <obliv_yao.h>
  #include <commitReveal.h>
-@@ -15,6 +16,14 @@
+@@ -7,7 +8,7 @@
+ #include <assert.h>
+ #include <errno.h>      // libgcrypt needs ENOMEM definition
+ #include <inttypes.h>
+-#include <stdio.h>      // for protoUseStdio()
++#include <stdio.h>      // for protoUseStdio()WEBRTC
+ #include <string.h>
+ #include <netinet/ip.h>
+ #include <netinet/tcp.h>
+@@ -15,6 +16,16 @@
  #include <pthread.h>
  #include <unistd.h>
  #include <gcrypt.h>
++#include <time.h>
 +#ifdef __EMSCRIPTEN__
 +#include <emscripten/emscripten.h>
 +#include <emscripten/websocket.h>
++#include <web_rtc.h>
 +#endif
 +
 +#ifndef __EMSCRIPTEN__
@@ -104,7 +122,7 @@ index 17695c9e..d872c82d 100644
  
  // Q: What's with all these casts to and from void* ?
  // A: Code generation becomes easier without the need for extraneous casts.
-@@ -71,6 +80,297 @@ static struct stdioTransport stdioTransport
+@@ -71,6 +82,490 @@ static struct stdioTransport stdioTransport
  void protocolUseStdio(ProtocolDesc* pd)
    { pd->trans = &stdioTransport.cb; }
  
@@ -123,7 +141,7 @@ index 17695c9e..d872c82d 100644
 +    pthread_mutex_lock(&client_lock);
 +    pthread_cond_signal(&client_var);
 +    pthread_mutex_unlock(&client_lock);
-+    
++
 +    return EM_TRUE;
 +}
 +static EM_BOOL onerror(int eventType, const EmscriptenWebSocketErrorEvent *websocketEvent, void *userData) {
@@ -240,6 +258,199 @@ index 17695c9e..d872c82d 100644
 +    exit(-1);
 +  }
 +}
++
++
++//--------------------------------------------------------------------------- WEBRTC
++
++static double send_time = 0;
++static double receive_time_on_message = 0;
++static double receive_time = 0;
++
++static EM_BOOL onopen_wrtc(const EmscriptenWebRtcOpenEvent *openEv) {
++    pthread_mutex_lock(&client_lock);
++    pthread_cond_signal(&client_var);
++    pthread_mutex_unlock(&client_lock);
++
++    return EM_TRUE;
++}
++static EM_BOOL onerror_wrtc(const EmscriptenWebRtcErrorEvent *errorEvent) {
++    return EM_TRUE;
++}
++static EM_BOOL onclose_wrtc(const EmscriptenWebRtcCloseEvent *closeEvent) {
++    return EM_TRUE;
++}
++
++static EM_BOOL onmessage_wrtc(const EmscriptenWebRtcMessageEvent *messageEvent, void *userData) {
++    clock_t begin = clock();
++    appendData((char *)(messageEvent->data), (int) messageEvent->numBytes);
++    clock_t end = clock();
++    double time_spent = (double)(end - begin) * 1000.0 / CLOCKS_PER_SEC;
++    receive_time_on_message+=time_spent;
++    return EM_TRUE;
++}
++
++typedef struct webRtcTransport
++{ ProtocolTransport cb;
++  bool isClient;
++  EMSCRIPTEN_DATA_CHANNEL_T data_channel;
++} webRtcTransport;
++
++static int webRtcSend(ProtocolTransport* pt,int dest,const void* s,size_t n)
++{
++  struct webRtcTransport* wrtc_pt = CAST(pt);
++
++    clock_t begin = clock();
++    EMSCRIPTEN_RESULT tmp = emscripten_data_channel_send_binary(wrtc_pt -> data_channel, s, (uint32_t) n);
++    clock_t end = clock();
++    double time_spent = (double)(end - begin) * 1000.0 / CLOCKS_PER_SEC;
++    send_time += time_spent;
++    return tmp;
++}
++
++static int webRtcPRecv(ProtocolTransport* pt,int src,void* s,size_t n)
++{
++  struct webRtcTransport* wrtc_pt = CAST(pt);
++
++  clock_t begin = clock();
++  readData(s, n);
++  clock_t end = clock();
++  double time_spent = (double)(end - begin)* 1000.0 / CLOCKS_PER_SEC;
++  receive_time += time_spent;
++
++  return n;
++}
++
++static int webRtcFlush(ProtocolTransport* pt)
++{
++  return 0;
++}
++
++static void webRtcCleanup(ProtocolTransport* pt)
++{
++  pipe_producer_free(pros);
++  pipe_consumer_free(cons);
++  webRtcTransport* t = CAST(pt);
++  free(pt);
++
++  printf("Send Time - %f\n", send_time);
++  printf("receive_time_on_message - %f\n", receive_time_on_message);
++  printf("receive_time - %f\n", receive_time);
++}
++
++  static const webRtcTransport webRtcTransportTemplate
++  = {{.maxParties=2, .split=NULL, .send=webRtcSend, .recv=webRtcPRecv, .flush=webRtcFlush,
++      .cleanup = webRtcCleanup},
++     .isClient=false, .data_channel=0
++    };
++
++
++  static webRtcTransport* webRtcClientTransportNew(const char *ws_url, const char *turn_urls, const char *data_channel_name, const EM_BOOL debug)
++  {
++    webRtcTransport* trans = malloc(sizeof(*trans));
++
++    *trans = webRtcTransportTemplate;
++
++    trans->isClient=true;
++
++    pthread_mutex_init(&client_lock, NULL);
++
++    pipe_t* p = pipe_new(sizeof(char), 0);
++
++    pros = pipe_producer_new(p);
++    cons = pipe_consumer_new(p);
++
++    pipe_free(p);
++
++    pthread_mutex_lock(&client_lock);
++
++    emscripten_broadcast_signal_initialize(ws_url);
++
++    EmscriptenWebRtcCreateAttributes w_rtc_attrs = {
++        turn_urls,
++        data_channel_name,
++        debug
++    };
++
++    EMSCRIPTEN_DATA_CHANNEL_T data_channel = emscripten_data_channel_new(&w_rtc_attrs);
++
++    emscripten_data_channel_set_onopen(data_channel, onopen_wrtc);
++    emscripten_data_channel_set_onerror(data_channel, onerror_wrtc);
++    emscripten_data_channel_set_onclose(data_channel, onclose_wrtc);
++    emscripten_data_channel_set_onmessage(data_channel, onmessage_wrtc);
++
++    emscripten_data_channel_connect(data_channel);
++
++    pthread_cond_wait(&client_var, &client_lock);
++    pthread_mutex_unlock(&client_lock);
++
++    trans -> data_channel = data_channel;
++
++    return trans;
++}
++
++  static webRtcTransport* webRtcServerTransportNew(const char *ws_url, const char *turn_urls, const char *data_channel_name, const EM_BOOL debug)
++  {
++    webRtcTransport* trans = malloc(sizeof(*trans));
++
++    *trans = webRtcTransportTemplate;
++
++    trans->isClient=false;
++
++    pthread_mutex_init(&client_lock, NULL);
++
++    pipe_t* p = pipe_new(sizeof(char), 0);
++
++    pros = pipe_producer_new(p);
++    cons = pipe_consumer_new(p);
++
++    pipe_free(p);
++
++    pthread_mutex_lock(&client_lock);
++
++    emscripten_broadcast_signal_initialize(ws_url);
++
++    EmscriptenWebRtcCreateAttributes w_rtc_attrs = {
++        turn_urls,
++        data_channel_name,
++        debug
++    };
++
++    EMSCRIPTEN_DATA_CHANNEL_T data_channel = emscripten_data_channel_new(&w_rtc_attrs);
++
++    emscripten_data_channel_set_onopen(data_channel, onopen_wrtc);
++    emscripten_data_channel_set_onerror(data_channel, onerror_wrtc);
++    emscripten_data_channel_set_onclose(data_channel, onclose_wrtc);
++    emscripten_data_channel_set_onmessage(data_channel, onmessage_wrtc);
++
++    emscripten_data_channel_listen(data_channel);
++
++    pthread_cond_wait(&client_var, &client_lock);
++    pthread_mutex_unlock(&client_lock);
++
++    trans -> data_channel = data_channel;
++
++    return trans;
++}
++
++void protocolUseWebRtcClient(ProtocolDesc* pd, const char *ws_url, const char *turn_urls, const char *data_channel_name, int debug)
++  {
++    pd->trans = &webRtcClientTransportNew(ws_url, turn_urls, data_channel_name, (EM_BOOL) debug)->cb;
++  }
++
++void protocolUseWebRtcServer(ProtocolDesc* pd, const char *ws_url, const char *turn_urls, const char *data_channel_name, int debug)
++  {
++    pd->trans = &webRtcServerTransportNew(ws_url, turn_urls, data_channel_name, (EM_BOOL) debug)->cb;
++  }
++
++void protocolUseWebRtc(ProtocolDesc* pd, bool client, const char *ws_url, const char *turn_urls, const char *data_channel_name, int debug){
++  if(client){
++    protocolUseWebRtcClient(pd, ws_url, turn_urls, data_channel_name, debug);
++  }else{
++    protocolUseWebRtcServer(pd, ws_url, turn_urls, data_channel_name, debug);
++  }
++}
++
++
 +#endif
 +
 +#ifndef __EMSCRIPTEN__
@@ -1807,4 +2018,78 @@ index 00000000..94c1a060
 +#endif
 +
 +/* vim: set et ts=4 sw=4 softtabstop=4 textwidth=80: */
+\ No newline at end of file
+diff --git a/src/ext/oblivc/web_rtc.h b/src/ext/oblivc/web_rtc.h
+new file mode 100644
+index 00000000..26fa5a65
+--- /dev/null
++++ b/src/ext/oblivc/web_rtc.h
+@@ -0,0 +1,67 @@
++#pragma once
++
++#include <stdint.h>
++#include <memory.h>
++
++#include <emscripten/emscripten.h>
++#include <emscripten/html5.h>
++
++
++#define EMSCRIPTEN_DATA_CHANNEL_T int
++
++typedef struct EmscriptenWebRtcCreateAttributes {
++    const char *turn_urls;
++    const char *data_channel_name;
++    const EM_BOOL debug;
++} EmscriptenWebRtcCreateAttributes;
++
++typedef struct EmscriptenWebRtcOpenEvent {
++    EMSCRIPTEN_DATA_CHANNEL_T dataChannelId;
++} EmscriptenWebRtcOpenEvent;
++
++void emscripten_broadcast_signal_initialize(char * data_channel_name);
++
++EMSCRIPTEN_RESULT emscripten_data_channel_new(EmscriptenWebRtcCreateAttributes * settings);
++
++
++typedef EM_BOOL (*em_data_channel_open_callback_func)(const EmscriptenWebRtcOpenEvent * data_channel_event);
++
++EMSCRIPTEN_RESULT emscripten_data_channel_set_onopen(EMSCRIPTEN_DATA_CHANNEL_T data_channel, em_data_channel_open_callback_func);
++
++
++typedef struct EmscriptenWebRtcErrorEvent {
++    EMSCRIPTEN_DATA_CHANNEL_T data_channel;
++} EmscriptenWebRtcErrorEvent;
++
++typedef EM_BOOL (*em_data_channel_error_callback_func)(const EmscriptenWebRtcErrorEvent *data_channel_event);
++
++EMSCRIPTEN_RESULT emscripten_data_channel_set_onerror(EMSCRIPTEN_DATA_CHANNEL_T data_channel, em_data_channel_error_callback_func);
++
++
++typedef struct EmscriptenWebRtcCloseEvent {
++    EMSCRIPTEN_DATA_CHANNEL_T data_channel;
++} EmscriptenWebRtcCloseEvent;
++
++typedef EM_BOOL (*em_data_channel_close_callback_func)(const EmscriptenWebRtcCloseEvent *data_channel_event);
++
++EMSCRIPTEN_RESULT emscripten_data_channel_set_onclose(EMSCRIPTEN_DATA_CHANNEL_T data_channel, em_data_channel_close_callback_func);
++
++
++typedef struct EmscriptenWebRtcMessageEvent {
++    EMSCRIPTEN_DATA_CHANNEL_T data_channel;
++    uint8_t *data;
++    uint32_t numBytes;
++    EM_BOOL isText;
++} EmscriptenWebRtcMessageEvent;
++
++typedef EM_BOOL (*em_data_channel_message_callback_func)(const EmscriptenWebRtcMessageEvent *data_channel_event);
++
++EMSCRIPTEN_RESULT emscripten_data_channel_set_onmessage(EMSCRIPTEN_DATA_CHANNEL_T data_channel, em_data_channel_message_callback_func);
++
++void emscripten_data_channel_connect(EMSCRIPTEN_DATA_CHANNEL_T dataChannelId);
++
++void emscripten_data_channel_listen(EMSCRIPTEN_DATA_CHANNEL_T dataChannelId);
++
++void emscripten_data_channel_deinitialize(EMSCRIPTEN_DATA_CHANNEL_T dataChannelId);
++
++EMSCRIPTEN_RESULT emscripten_data_channel_send_binary(EMSCRIPTEN_DATA_CHANNEL_T data_channel, void *binaryData, uint32_t dataLength);
 \ No newline at end of file

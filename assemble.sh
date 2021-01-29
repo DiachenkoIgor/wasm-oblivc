@@ -131,4 +131,15 @@ git apply ../oblivc-gcc.patch
 
 make
 
+cd ..
+
+printf "\n--------------------------------------------- Emscripten Library Update\n\n"
+
+if ! grep -q 'emscripten_data_channel_new' $1/upstream/emscripten/src/library.js; then
+  cat ./library_webRtc.js >> $1/upstream/emscripten/src/library.js
+fi
+
+
+
+
 
