@@ -2019,6 +2019,42 @@ index 00000000..94c1a060
 +
 +/* vim: set et ts=4 sw=4 softtabstop=4 textwidth=80: */
 \ No newline at end of file
+diff --git a/src/ext/oblivc/psi.c b/src/ext/oblivc/psi.c
+index 62fe1181..f4a613af 100644
+--- a/src/ext/oblivc/psi.c
++++ b/src/ext/oblivc/psi.c
+@@ -102,6 +102,21 @@ int compare_points(const void* va, const void* vb, void* vargs)
+   c = gcry_mpi_cmp(args->ay,args->by);       return c;
+ }
+ 
++static PointCompareArgs *argsGlobal = NULL;
++
++static
++int compare_points_global(const void* va, const void* vb)
++{
++  int c;
++  PointCompareArgs *args = argsGlobal;
++  const gcry_mpi_point_t *a = va;
++  const gcry_mpi_point_t *b = vb;
++  gcry_mpi_ec_get_affine(args->ax,args->ay,*a,args->ec);
++  gcry_mpi_ec_get_affine(args->bx,args->by,*b,args->ec);
++  c = gcry_mpi_cmp(args->ax,args->bx); if(c) return c;
++  c = gcry_mpi_cmp(args->ay,args->by);       return c;
++}
++
+ // stdlib.h binary search didn't have an "arg" parameter
+ static
+ bool bsearchPoint(gcry_mpi_point_t p,gcry_mpi_point_t* data,size_t n,
+@@ -173,7 +188,8 @@ OcPsiResult* execPsiProtocol_DH(ProtocolDesc* pd,
+   xchgPoints(pd,curve,your,nu,mine,ni);
+ 
+   PointCompareArgs *args = pcaNew(curve);
+-  qsort_r(your,nu,sizeof(*your),compare_points,args);
++  argsGlobal = args;
++  qsort(your,nu,sizeof(*your),compare_points_global);
+   OcPsiResult* res = ocPsiResultNew(ni<nu?ni:nu);
+   for(i=0;i<ni;++i) if(bsearchPoint(mine[i],your,nu,args))
+     res->indices[res->n++] = order[i];
 diff --git a/src/ext/oblivc/web_rtc.h b/src/ext/oblivc/web_rtc.h
 new file mode 100644
 index 00000000..26fa5a65

@@ -1,7 +1,18 @@
 diff --git a/Makefile.in b/Makefile.in
-index a6fa00a0..0b6c5eda 100644
+index a6fa00a0..9b86fe82 100644
 --- a/Makefile.in
 +++ b/Makefile.in
+@@ -35,8 +35,8 @@ config.h: stamp-h
+ stamp-h: config.h.in config.status
+ 	./config.status
+ 
+-CC=@CC@
+-CPP=@CPP@
++CC=@CC@ -I../libs/include -L../libs/lib -pthread
++CPP=@CPP@ -I../libs/include -L../libs/lib -pthread
+ CFLAGS=@CFLAGS@
+ @DEFAULT_COMPILER@=1
+ 
 @@ -79,7 +79,7 @@ ifeq ($(OCAMLNATDYNLINK),yes)
    CILLY_EXE_FILES += $(OBJDIR)/src/main.native
  endif
